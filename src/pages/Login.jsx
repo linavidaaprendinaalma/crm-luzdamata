@@ -5,20 +5,19 @@ export default function Login() {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-mata-bark px-6 py-10">
-      {/* Foto de fundo — troque a URL abaixo pelo arquivo real quando tiver
-          (ex: importe de src/assets/login-hero.jpg e use aqui). Enquanto
-          não existe, cai num gradiente escuro elegante como fallback. */}
+      {/* Foto de fundo: o arquivo login-hero.jpg deve estar dentro da pasta
+          "public" (na raiz do projeto, ao lado de index.html), não em src/ */}
       <div
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(120deg, rgba(20,14,10,0.55), rgba(20,14,10,0.85)), url('/src/assets/login-hero.jpg')",
+            "linear-gradient(90deg, rgba(20,14,10,0.15) 0%, rgba(20,14,10,0.85) 78%, rgba(20,14,10,0.97) 100%), url('/login-hero.jpg')",
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundPosition: 'left center',
         }}
       />
 
-      {/* Vinheta radial dourada sutil, para dar profundidade sem depender da foto */}
+      {/* Vinheta radial dourada sutil por trás do card */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -27,13 +26,7 @@ export default function Login() {
         }}
       />
 
-      {/* Textos decorativos nos cantos, só aparecem em telas largas */}
-      <p className="hidden lg:block absolute top-10 left-10 max-w-xs font-display text-3xl leading-tight text-mata-cream">
-        Beleza que impulsa mulheres <span className="italic text-mata-gold">reais.</span>
-      </p>
-      <p className="hidden lg:block absolute bottom-10 left-10 text-[11px] tracking-widest text-mata-sand/60 leading-relaxed">
-        MAIS QUE COSMÉTICOS.<br />CONQUISTAS REAIS.
-      </p>
+      {/* Texto decorativo no canto superior direito */}
       <p className="hidden lg:block absolute top-10 right-10 text-right font-display italic text-mata-gold/80 text-lg leading-snug">
         Beleza que conecta<br />pessoas
       </p>
@@ -72,7 +65,7 @@ export default function Login() {
           </button>
 
           <p className="text-mata-sand/40 text-xs mt-8">
-            Acesso restrita à equipe LuzDaMata.
+            Acesso restrito à equipe LuzDaMata.
           </p>
         </div>
 
