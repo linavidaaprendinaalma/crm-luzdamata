@@ -29,7 +29,7 @@ export default function Login() {
       <img
         src="/login-model.png"
         alt=""
-        className="hidden md:block absolute bottom-0 left-0 h-[85%] lg:h-[95%] w-auto object-contain object-bottom pointer-events-none select-none"
+        className="hidden md:block absolute -bottom-8 lg:-bottom-14 left-0 h-[85%] lg:h-[95%] w-auto object-contain object-bottom pointer-events-none select-none"
       />
 
       {/* Textos decorativos nos cantos, só em telas largas */}
