@@ -36,10 +36,10 @@ export default function Login() {
       <p className="hidden lg:block absolute top-10 left-10 max-w-xs font-display text-3xl leading-tight text-mata-cream drop-shadow-lg">
         Beleza que impulsa mulheres <span className="italic text-mata-gold">reais.</span>
       </p>
-      <p className="hidden lg:block absolute bottom-10 left-10 text-[11px] tracking-widest text-mata-sand/70 leading-relaxed drop-shadow">
+      <p className="hidden lg:block absolute top-10 left-10 text-[11px] tracking-widest text-mata-sand/70 leading-relaxed drop-shadow">
         MAIS QUE COSMÉTICOS.<br />CONQUISTAS REAIS.
       </p>
-      <p className="hidden lg:block absolute top-10 right-10 text-right font-display italic text-mata-gold/80 text-lg leading-snug drop-shadow">
+      <p className="hidden lg:block absolute top-10 right-10 text-right font-display text-mata-gold/80 text-lg leading-snug drop-shadow">
         Beleza que conecta<br />pessoas
       </p>
 
