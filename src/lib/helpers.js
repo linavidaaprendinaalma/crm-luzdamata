@@ -28,3 +28,20 @@ export function estaAtrasado(ultimoContatoISO, limite = 30) {
   if (dias === null) return true
   return dias > limite
 }
+
+// Classifica o relacionamento com base no último contato/venda:
+// 'em_dia' (até 15 dias), 'atencao' (16 a 30 dias) ou 'precisa_contato'
+// (mais de 30 dias, ou nunca contatado).
+export function categoriaRelacionamento(ultimoContatoISO) {
+  const dias = diasDesde(ultimoContatoISO)
+  if (dias === null) return 'precisa_contato'
+  if (dias <= 15) return 'em_dia'
+  if (dias <= 30) return 'atencao'
+  return 'precisa_contato'
+}
+
+export const LABEL_CATEGORIA = {
+  em_dia: 'Em dia',
+  atencao: 'Atenção',
+  precisa_contato: 'Precisa de contato',
+}
