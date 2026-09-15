@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { formatarDataHora } from '../lib/helpers'
 
@@ -11,6 +12,8 @@ const vazio = {
 }
 
 export default function Visitas() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [visitas, setVisitas] = useState([])
   const [contatos, setContatos] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -22,15 +25,28 @@ export default function Visitas() {
     carregar()
   }, [])
 
+  // Se chegou aqui vindo do Dashboard (clique em "Registrar contato/visita"),
+  // já abre o formulário com o cliente pré-selecionado.
+  useEffect(() => {
+    const idPreSelecionado = location.state?.novoContatoId
+    if (idPreSelecionado) {
+      setForm({ ...vazio, contato_id: idPreSelecionado })
+      setMostrarForm(true)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function carregar() {
     setCarregando(true)
     const { data: vData } = await supabase
       .from('visitas')
       .select('*, contatos(nome)')
       .order('data_visita', { ascending: false })
-    const { data: cData } = await supabase.from('contatos').select('id, nome, tipo').order('nome')
+    const { data: cData } = await supabase.from('contatos').select('id, nome, tipo, ativo').order('nome')
     setVisitas(vData || [])
-    setContatos(cData || [])
+    // Contatos inativos não devem aparecer como opção para registrar nova visita/contato
+    setContatos((cData || []).filter((c) => c.ativo !== false))
     setCarregando(false)
   }
 

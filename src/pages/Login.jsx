@@ -1,7 +1,26 @@
+import { useState } from 'react'
 import { useAuth } from '../AuthContext'
 
 export default function Login() {
-  const { entrarComGoogle } = useAuth()
+  const { entrarComEmailSenha } = useAuth()
+  const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState('')
+  const [carregando, setCarregando] = useState(false)
+
+  async function handleLogin(e) {
+    e.preventDefault()
+    setErro('')
+    setCarregando(true)
+
+    const { error } = await entrarComEmailSenha(email, senha)
+
+    setCarregando(false)
+
+    if (error) {
+      setErro('Email ou senha incorretos.')
+    }
+  }
 
   return (
     <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-mata-bark px-6 py-10">
@@ -36,7 +55,7 @@ export default function Login() {
       <p className="hidden lg:block absolute top-10 left-10 max-w-xs font-display text-3xl leading-tight text-mata-cream drop-shadow-lg">
         Beleza que impulsa mulheres <span className="italic text-mata-gold">reais.</span>
       </p>
-      <p className="hidden lg:block absolute top-[80] left-10 text-[11px] tracking-widest text-mata-sand/70 leading-relaxed drop-shadow">
+      <p className="hidden lg:block absolute top-[140] left-10 text-[11px] tracking-widest text-mata-sand/70 leading-relaxed drop-shadow">
         MAIS QUE COSMÉTICOS.<br />CONQUISTAS REAIS.
       </p>
       <p className="hidden lg:block absolute top-10 right-10 text-right font-display text-mata-gold/80 text-lg leading-snug drop-shadow">
@@ -57,22 +76,47 @@ export default function Login() {
 
           <p className="uppercase tracking-widest text-mata-gold text-xs mb-3">Ilumine sua beleza</p>
           <h1 className="font-display text-4xl text-mata-cream mb-2">CRM LuzDaMata</h1>
-          <p className="text-mata-sand/70 text-sm mb-10">
+          <p className="text-mata-sand/70 text-sm mb-8">
             Acompanhe compradoras, revendedoras e visitas em um só lugar.
           </p>
 
-          <button
-            onClick={entrarComGoogle}
-            className="w-full flex items-center justify-center gap-3 bg-mata-cream text-mata-ink font-medium rounded-full py-3 px-6 hover:bg-white transition-colors"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/>
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.92-2.27c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34C2.44 15.98 5.48 18 9 18z"/>
-              <path fill="#FBBC05" d="M3.97 10.72c-.18-.54-.28-1.11-.28-1.72s.1-1.18.28-1.72V4.94H.96C.35 6.17 0 7.55 0 9s.35 2.83.96 4.06l3.01-2.34z"/>
-              <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/>
-            </svg>
-            Entrar com Google
-          </button>
+          <form onSubmit={handleLogin} className="space-y-3 text-left">
+            <div>
+              <label className="text-mata-sand/70 text-xs">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-full bg-mata-cream/95 text-mata-ink px-4 py-2 mt-1 outline-none focus:ring-2 focus:ring-mata-gold"
+                placeholder="seuemail@exemplo.com"
+              />
+            </div>
+
+            <div>
+              <label className="text-mata-sand/70 text-xs">Senha</label>
+              <input
+                type="password"
+                required
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                className="w-full rounded-full bg-mata-cream/95 text-mata-ink px-4 py-2 mt-1 outline-none focus:ring-2 focus:ring-mata-gold"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {erro && (
+              <p className="text-red-300 text-xs text-center">{erro}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={carregando}
+              className="w-full bg-mata-cream text-mata-ink font-medium rounded-full py-3 px-6 hover:bg-white transition-colors disabled:opacity-60 mt-2"
+            >
+              {carregando ? 'Entrando...' : 'Entrar'}
+            </button>
+          </form>
 
           <p className="text-mata-sand/40 text-xs mt-8">
             Acesso restrito à equipe LuzDaMata.

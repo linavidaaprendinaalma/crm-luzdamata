@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { diasDesde, estaAtrasado, formatarData } from '../lib/helpers'
 
-const vazio = { nome: '', tipo: 'comprador', telefone: '', email: '', cidade: '', observacoes: '' }
+const vazio = { nome: '', tipo: 'comprador', telefone: '', email: '', cidade: '', observacoes: '', ativo: true, data_inativacao: null }
 
 export default function Cadastro() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [contatos, setContatos] = useState([])
   const [ultimoContato, setUltimoContato] = useState({}) // { contato_id: dataISO }
   const [aba, setAba] = useState('comprador')
+  const [mostrarInativos, setMostrarInativos] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [form, setForm] = useState(vazio)
   const [editandoId, setEditandoId] = useState(null)
@@ -16,6 +20,21 @@ export default function Cadastro() {
   useEffect(() => {
     carregar()
   }, [])
+
+  // Se chegou aqui vindo do Dashboard (clique em "Ver cliente"),
+  // abre direto a ficha de edição do contato indicado.
+  useEffect(() => {
+    const idParaAbrir = location.state?.editarContatoId
+    if (idParaAbrir && contatos.length > 0) {
+      const c = contatos.find((x) => x.id === idParaAbrir)
+      if (c) {
+        setAba(c.tipo)
+        abrirEdicao(c)
+      }
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contatos])
 
   async function carregar() {
     setCarregando(true)
@@ -72,7 +91,21 @@ export default function Cadastro() {
     carregar()
   }
 
-  const listaFiltrada = contatos.filter((c) => c.tipo === aba)
+  async function alternarAtivo(c) {
+    const vaiDesativar = c.ativo !== false
+    await supabase
+      .from('contatos')
+      .update({
+        ativo: !vaiDesativar,
+        data_inativacao: vaiDesativar ? new Date().toISOString() : null,
+      })
+      .eq('id', c.id)
+    carregar()
+  }
+
+  const listaFiltrada = contatos.filter(
+    (c) => c.tipo === aba && (mostrarInativos ? true : c.ativo !== false)
+  )
 
   return (
     <div className="p-8 max-w-5xl">
@@ -89,18 +122,28 @@ export default function Cadastro() {
         </button>
       </div>
 
-      <div className="flex gap-1 mb-5 border-b border-mata-sand">
-        {['comprador', 'revendedor'].map((t) => (
-          <button
-            key={t}
-            onClick={() => setAba(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              aba === t ? 'border-mata-copper text-mata-copper' : 'border-transparent text-mata-ink/50'
-            }`}
-          >
-            {t === 'comprador' ? 'Compradoras' : 'Revendedoras'}
-          </button>
-        ))}
+      <div className="flex items-center justify-between mb-5 border-b border-mata-sand">
+        <div className="flex gap-1">
+          {['comprador', 'revendedor'].map((t) => (
+            <button
+              key={t}
+              onClick={() => setAba(t)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                aba === t ? 'border-mata-copper text-mata-copper' : 'border-transparent text-mata-ink/50'
+              }`}
+            >
+              {t === 'comprador' ? 'Compradoras' : 'Revendedoras'}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-mata-ink/50 pb-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={mostrarInativos}
+            onChange={(e) => setMostrarInativos(e.target.checked)}
+          />
+          Mostrar inativos
+        </label>
       </div>
 
       {carregando ? (
@@ -123,9 +166,17 @@ export default function Cadastro() {
               {listaFiltrada.map((c) => {
                 const ultima = ultimoContato[c.id]
                 const atrasado = estaAtrasado(ultima)
+                const inativo = c.ativo === false
                 return (
-                  <tr key={c.id} className="border-t border-mata-sand/70">
-                    <td className="px-4 py-3 font-medium">{c.nome}</td>
+                  <tr key={c.id} className={`border-t border-mata-sand/70 ${inativo ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-3 font-medium">
+                      {c.nome}
+                      {inativo && (
+                        <span className="ml-2 inline-block text-[10px] bg-mata-sand text-mata-ink/60 px-2 py-0.5 rounded-full">
+                          Inativo{c.data_inativacao ? ` desde ${formatarData(c.data_inativacao)}` : ''}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-mata-ink/70">{c.telefone || c.email || '—'}</td>
                     <td className="px-4 py-3 text-mata-ink/70">{c.cidade || '—'}</td>
                     <td className="px-4 py-3">
@@ -141,6 +192,9 @@ export default function Cadastro() {
                     <td className="px-4 py-3 text-right space-x-3">
                       <button onClick={() => abrirEdicao(c)} className="text-mata-copper hover:underline">
                         Editar
+                      </button>
+                      <button onClick={() => alternarAtivo(c)} className="text-mata-ink/50 hover:underline">
+                        {inativo ? 'Ativar' : 'Desativar'}
                       </button>
                       <button onClick={() => excluir(c.id)} className="text-mata-ink/40 hover:text-red-600">
                         Excluir
@@ -208,6 +262,42 @@ export default function Cadastro() {
               className="w-full border border-mata-sand rounded-lg px-3 py-2 text-sm"
               rows={3}
             />
+
+            {editandoId && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-mata-ink/70 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.ativo !== false}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        ativo: e.target.checked,
+                        data_inativacao: e.target.checked
+                          ? null
+                          : form.data_inativacao || new Date().toISOString(),
+                      })
+                    }
+                  />
+                  Cadastro ativo
+                </label>
+
+                {form.ativo === false && (
+                  <div>
+                    <label className="text-xs text-mata-ink/60">Inativo desde</label>
+                    <input
+                      type="date"
+                      value={(form.data_inativacao || new Date().toISOString()).slice(0, 10)}
+                      onChange={(e) => setForm({ ...form, data_inativacao: e.target.value })}
+                      className="w-full border border-mata-sand rounded-lg px-3 py-2 text-sm mt-1"
+                    />
+                    <p className="text-[11px] text-mata-ink/40 mt-1">
+                      Vendas e visitas até essa data continuam contando no Dashboard.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <button

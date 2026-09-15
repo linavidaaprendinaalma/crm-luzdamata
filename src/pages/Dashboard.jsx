@@ -1,17 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { supabase } from '../supabaseClient'
-import { formatarMoeda, diasDesde, estaAtrasado, formatarData } from '../lib/helpers'
+import { formatarMoeda, diasDesde, formatarData, categoriaRelacionamento, LABEL_CATEGORIA } from '../lib/helpers'
 import { exportarParaExcel } from '../lib/excel'
 
 const CORES = ['#B0673A', '#C9A15A', '#5C6E4A', '#8C5A3C', '#3B2417']
 
+const ESTILO_CATEGORIA = {
+  em_dia: { emoji: '🟢', cor: 'text-mata-moss', bg: 'bg-mata-moss/10' },
+  atencao: { emoji: '🟡', cor: 'text-amber-600', bg: 'bg-amber-50' },
+  precisa_contato: { emoji: '🔴', cor: 'text-red-600', bg: 'bg-red-50' },
+}
+
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [carregando, setCarregando] = useState(true)
   const [contatos, setContatos] = useState([])
   const [visitas, setVisitas] = useState([])
   const [vendas, setVendas] = useState([])
   const [itensPorVenda, setItensPorVenda] = useState({})
+  const [categoriaAberta, setCategoriaAberta] = useState(null) // 'em_dia' | 'atencao' | 'precisa_contato' | null
 
   useEffect(() => {
     carregar()
@@ -39,7 +48,31 @@ export default function Dashboard() {
 
   if (carregando) return <div className="p-8 text-mata-ink/50 text-sm">Carregando…</div>
 
-  // -------- cálculos --------
+  // -------- filtro base: relacionamento considera SÓ contatos ativos hoje --------
+  const contatosAtivos = contatos.filter((c) => c.ativo !== false)
+  const idsAtivos = new Set(contatosAtivos.map((c) => c.id))
+  const visitasAtivas = visitas.filter((v) => !v.contato_id || idsAtivos.has(v.contato_id))
+  const vendasAtivasHoje = vendas.filter((v) => idsAtivos.has(v.contato_id))
+
+  // -------- filtro para indicadores financeiros: conta vendas de contatos
+  // ativos normalmente, e de contatos inativos até a data em que ficaram
+  // inativos (vendas feitas antes da desativação continuam no histórico) --------
+  const contatosPorId = {}
+  contatos.forEach((c) => {
+    contatosPorId[c.id] = c
+  })
+
+  function vendaContaNoHistorico(v) {
+    const c = contatosPorId[v.contato_id]
+    if (!c) return false
+    if (c.ativo !== false) return true
+    if (!c.data_inativacao) return false // inativo sem data registrada: não conta, por segurança
+    return new Date(v.data_venda) <= new Date(c.data_inativacao)
+  }
+
+  const vendasParaIndicadores = vendas.filter(vendaContaNoHistorico)
+
+  // -------- cálculos financeiros (contatos ativos + inativos até a data de inativação) --------
   const hoje = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
 
@@ -49,7 +82,7 @@ export default function Dashboard() {
   const produtoVendas = {}
   const clienteTotais = {}
 
-  vendas.forEach((v) => {
+  vendasParaIndicadores.forEach((v) => {
     const itens = itensPorVenda[v.id] || []
     const totalVenda = itens.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0)
     rendaAcumulada += totalVenda
@@ -80,16 +113,52 @@ export default function Dashboard() {
     .slice(0, 5)
     .map(([nome, total]) => ({ nome, total }))
 
-  // último contato (visita ou venda) por contato_id
+  // -------- relacionamento: último contato (visita ou venda) por contato --------
+  // considerando somente visitas/vendas ligadas a contatos ativos
   const ultimoContato = {}
-  ;[...visitas.filter((v) => v.contato_id), ...vendas].forEach((r) => {
+  ;[...visitasAtivas.filter((v) => v.contato_id), ...vendasAtivasHoje].forEach((r) => {
     const data = r.data_visita || r.data_venda
     const id = r.contato_id
     if (!ultimoContato[id] || new Date(data) > new Date(ultimoContato[id])) {
       ultimoContato[id] = data
     }
   })
-  const atrasados = contatos.filter((c) => estaAtrasado(ultimoContato[c.id]))
+
+  // classifica cada contato ativo em em_dia / atencao / precisa_contato
+  const porCategoria = { em_dia: [], atencao: [], precisa_contato: [] }
+  contatosAtivos.forEach((c) => {
+    const cat = categoriaRelacionamento(ultimoContato[c.id])
+    porCategoria[cat].push(c)
+  })
+
+  // lista "precisa de contato" ordenada pelo maior número de dias sem contato primeiro
+  // (nunca contatado conta como o maior atraso possível)
+  function ordenarPorDiasDesc(lista) {
+    return [...lista].sort((a, b) => {
+      const diasA = diasDesde(ultimoContato[a.id])
+      const diasB = diasDesde(ultimoContato[b.id])
+      if (diasA === null && diasB === null) return 0
+      if (diasA === null) return -1
+      if (diasB === null) return 1
+      return diasB - diasA
+    })
+  }
+
+  const listaCategoriaAberta = categoriaAberta
+    ? categoriaAberta === 'precisa_contato'
+      ? ordenarPorDiasDesc(porCategoria[categoriaAberta])
+      : porCategoria[categoriaAberta]
+    : []
+
+  function verCliente(id) {
+    setCategoriaAberta(null)
+    navigate('/cadastro', { state: { editarContatoId: id } })
+  }
+
+  function registrarContato(id) {
+    setCategoriaAberta(null)
+    navigate('/visitas', { state: { novoContatoId: id } })
+  }
 
   return (
     <div className="p-8 max-w-6xl">
@@ -106,7 +175,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="bg-white border border-mata-sand rounded-xl p-5">
           <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda do mês</p>
           <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaMes)}</p>
@@ -115,10 +184,25 @@ export default function Dashboard() {
           <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda acumulada</p>
           <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaAcumulada)}</p>
         </div>
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Contatos atrasados (+30d)</p>
-          <p className="font-display text-2xl text-red-600 mt-1">{atrasados.length}</p>
-        </div>
+      </div>
+
+      {/* Indicador de relacionamento — só contatos ativos, clicável */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {['em_dia', 'atencao', 'precisa_contato'].map((cat) => {
+          const estilo = ESTILO_CATEGORIA[cat]
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategoriaAberta(cat)}
+              className={`text-left bg-white border border-mata-sand rounded-xl p-5 hover:shadow-md transition-shadow ${estilo.bg}`}
+            >
+              <p className="text-xs text-mata-ink/50 uppercase tracking-wide">
+                {estilo.emoji} {LABEL_CATEGORIA[cat]}
+              </p>
+              <p className={`font-display text-2xl mt-1 ${estilo.cor}`}>{porCategoria[cat].length}</p>
+            </button>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -165,20 +249,75 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Precisam de contato (+30 dias)</p>
+          <p className="text-sm font-medium mb-3">🔴 Precisam de contato</p>
           <ul className="space-y-2">
-            {atrasados.slice(0, 8).map((c) => (
+            {ordenarPorDiasDesc(porCategoria.precisa_contato).slice(0, 8).map((c) => (
               <li key={c.id} className="flex justify-between text-sm">
                 <span>{c.nome} <span className="text-xs text-mata-ink/40">({c.tipo === 'comprador' ? 'compradora' : 'revendedora'})</span></span>
                 <span className="text-red-600 text-xs">
-                  {ultimoContato[c.id] ? `${diasDesde(ultimoContato[c.id])}d — ${formatarData(ultimoContato[c.id])}` : 'nunca contatada'}
+                  {ultimoContato[c.id] ? `${diasDesde(ultimoContato[c.id])}d — ${formatarData(ultimoContato[c.id])}` : 'Nunca contatado'}
                 </span>
               </li>
             ))}
-            {atrasados.length === 0 && <p className="text-sm text-mata-ink/40">Tudo em dia 🌿</p>}
+            {porCategoria.precisa_contato.length === 0 && <p className="text-sm text-mata-ink/40">Tudo em dia 🌿</p>}
           </ul>
         </div>
       </div>
+
+      {/* Modal com a lista detalhada da categoria clicada */}
+      {categoriaAberta && (
+        <div className="fixed inset-0 bg-mata-ink/40 flex items-center justify-center p-6 z-20">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl">
+                {ESTILO_CATEGORIA[categoriaAberta].emoji} {LABEL_CATEGORIA[categoriaAberta]}{' '}
+                <span className="text-mata-ink/40 text-sm font-sans">({listaCategoriaAberta.length})</span>
+              </h3>
+              <button onClick={() => setCategoriaAberta(null)} className="text-mata-ink/40 hover:text-mata-ink text-sm">
+                Fechar ✕
+              </button>
+            </div>
+
+            {listaCategoriaAberta.length === 0 ? (
+              <p className="text-sm text-mata-ink/40">Nenhum contato ativo nessa categoria.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-mata-ink/50 text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left py-2">Nome</th>
+                    <th className="text-left py-2">Tipo</th>
+                    <th className="text-left py-2">Último contato</th>
+                    <th className="text-left py-2">Dias</th>
+                    <th className="text-right py-2">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listaCategoriaAberta.map((c) => {
+                    const ultima = ultimoContato[c.id]
+                    const dias = diasDesde(ultima)
+                    return (
+                      <tr key={c.id} className="border-t border-mata-sand/70">
+                        <td className="py-2.5 font-medium">{c.nome}</td>
+                        <td className="py-2.5 text-mata-ink/60">{c.tipo === 'comprador' ? 'Compradora' : 'Revendedora'}</td>
+                        <td className="py-2.5 text-mata-ink/60">{ultima ? formatarData(ultima) : '—'}</td>
+                        <td className="py-2.5 text-mata-ink/60">{dias === null ? 'Nunca contatado' : `${dias}d`}</td>
+                        <td className="py-2.5 text-right space-x-3">
+                          <button onClick={() => verCliente(c.id)} className="text-mata-copper hover:underline">
+                            👁 Ver cliente
+                          </button>
+                          <button onClick={() => registrarContato(c.id)} className="text-mata-copper hover:underline">
+                            📝 Registrar contato
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
