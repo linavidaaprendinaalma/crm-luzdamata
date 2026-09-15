@@ -27,12 +27,27 @@ export function AuthProvider({ children }) {
     })
   }
 
+  async function entrarComEmailSenha(email, senha) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: senha,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data
+  }
+
   async function sair() {
     await supabase.auth.signOut()
   }
 
   return (
-    <AuthContext.Provider value={{ session, carregando, entrarComGoogle, sair }}>
+    <AuthContext.Provider
+      value={{ session, carregando, entrarComGoogle, entrarComEmailSenha, sair }}
+    >
       {children}
     </AuthContext.Provider>
   )
