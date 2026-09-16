@@ -39,11 +39,22 @@ function iniciais(nome) {
   return (primeira + ultima).toUpperCase()
 }
 
+function dataDeHojeFormatada() {
+  const texto = new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
 export default function Layout() {
   const { session, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
   const [pageHeader, setPageHeader] = useState({ title: '', subtitle: '', actions: null })
   const nome = nomeExibicao(session)
+  const dataHoje = dataDeHojeFormatada()
 
   return (
     <div className="h-screen bg-mata-cream flex overflow-hidden">
@@ -91,27 +102,25 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <header
-          className="h-16 shrink-0 border-b border-mata-sand bg-mata-cream flex items-center justify-between px-6 gap-4 relative overflow-hidden"
-          style={{
-            backgroundImage: `linear-gradient(90deg, rgba(250,246,238,1) 40%, rgba(250,246,238,0.4)), url(${bannerCabecalho})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'right center',
-            backgroundRepeat: 'no-repeat',
-          }}
-        >
-          <div className="min-w-0">
-            {pageHeader.title && (
-              <h2 className="font-display text-lg text-mata-ink leading-tight truncate">{pageHeader.title}</h2>
-            )}
-            {pageHeader.subtitle && (
-              <p className="text-mata-ink/50 text-xs truncate">{pageHeader.subtitle}</p>
-            )}
+        <header className="h-14 shrink-0 border-b border-mata-sand bg-mata-cream flex items-center justify-between px-6 gap-4 relative">
+          <div className="flex items-center gap-4 min-w-0">
+            <span className="flex items-center gap-1.5 text-sm text-mata-ink/60 shrink-0">
+              <span>🏠</span>
+              <span>Início</span>
+              {pageHeader.title && (
+                <>
+                  <span className="text-mata-ink/30">/</span>
+                  <span className="text-mata-ink font-medium">{pageHeader.title}</span>
+                </>
+              )}
+            </span>
+            <span className="hidden md:flex items-center gap-1.5 text-sm text-mata-ink/50 shrink-0">
+              <span>📅</span>
+              <span className="capitalize">{dataHoje}</span>
+            </span>
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
-            {pageHeader.actions}
-
             <button
               type="button"
               className="text-mata-ink/50 hover:text-mata-ink"
@@ -147,6 +156,33 @@ export default function Layout() {
             </div>
           )}
         </header>
+
+        {pageHeader.title && (
+          <div
+            className="h-24 shrink-0 border-b border-mata-sand px-6 flex items-center justify-between gap-4 relative overflow-hidden bg-mata-cream"
+            style={{
+              backgroundImage: `linear-gradient(90deg, rgba(250,246,238,1) 42%, rgba(250,246,238,0.55) 72%, rgba(250,246,238,0.15)), url(${bannerCabecalho})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            }}
+          >
+            <div className="relative z-10 min-w-0 shrink-0">
+              <h2 className="font-display text-3xl text-mata-ink leading-tight">{pageHeader.title}</h2>
+              {pageHeader.subtitle && (
+                <p className="text-mata-ink/60 text-sm mt-1">{pageHeader.subtitle}</p>
+              )}
+            </div>
+
+            <p className="relative z-10 hidden lg:block italic font-display text-mata-copper text-base leading-snug text-right">
+              Conexões que geram
+              <br />
+              novas histórias.
+            </p>
+
+            {pageHeader.actions && <div className="relative z-10 shrink-0">{pageHeader.actions}</div>}
+          </div>
+        )}
 
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto">
           <Outlet context={{ setPageHeader }} />
