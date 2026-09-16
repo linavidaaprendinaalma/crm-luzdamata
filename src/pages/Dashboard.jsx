@@ -357,36 +357,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Clientes que mais compram</p>
-          <ul className="space-y-2">
-            {topClientes.map((c) => (
-              <li key={c.nome} className="flex justify-between text-sm">
-                <span>{c.nome}</span>
-                <span className="text-mata-copper font-medium">{formatarMoeda(c.total)}</span>
-              </li>
-            ))}
-            {topClientes.length === 0 && <p className="text-sm text-mata-ink/40">Sem vendas ainda.</p>}
-          </ul>
-        </div>
-
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">🔴 Precisam de contato</p>
-          <ul className="space-y-2">
-            {ordenarPorDiasDesc(porCategoria.precisa_contato).slice(0, 8).map((c) => (
-              <li key={c.id} className="flex justify-between text-sm">
-                <span>{c.nome} <span className="text-xs text-mata-ink/40">({c.tipo === 'comprador' ? 'compradora' : 'revendedora'})</span></span>
-                <span className="text-red-600 text-xs">
-                  {ultimoContato[c.id] ? `${diasDesde(ultimoContato[c.id])}d — ${formatarData(ultimoContato[c.id])}` : 'Nunca contatado'}
-                </span>
-              </li>
-            ))}
-            {porCategoria.precisa_contato.length === 0 && <p className="text-sm text-mata-ink/40">Tudo em dia 🌿</p>}
-          </ul>
-        </div>
-      </div>
-
       {/* Modal com a lista detalhada da categoria clicada */}
       {categoriaAberta && (
         <div className="fixed inset-0 bg-mata-ink/40 flex items-center justify-center p-6 z-20">
