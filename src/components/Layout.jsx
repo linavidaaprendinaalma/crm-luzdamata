@@ -40,7 +40,7 @@ export default function Layout() {
   const nome = nomeExibicao(session)
 
   return (
-    <div className="min-h-screen bg-mata-cream flex">
+    <div className="h-screen bg-mata-cream flex overflow-hidden">
       <aside
         className="w-60 text-mata-cream flex flex-col shrink-0 relative overflow-hidden bg-mata-bark"
         style={{
@@ -84,8 +84,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="h-16 shrink-0 border-b border-mata-sand bg-white flex items-center justify-end px-6 gap-4 relative">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        <header className="h-16 shrink-0 border-b border-mata-sand bg-mata-cream flex items-center justify-end px-6 gap-4 relative">
           <button
             type="button"
             className="text-mata-ink/50 hover:text-mata-ink"
@@ -121,7 +121,7 @@ export default function Layout() {
           )}
         </header>
 
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto">
           <Outlet />
         </main>
       </div>
