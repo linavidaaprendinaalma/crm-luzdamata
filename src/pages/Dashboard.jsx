@@ -1,21 +1,51 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { supabase } from '../supabaseClient'
-import { formatarMoeda, diasDesde, estaAtrasado, formatarData } from '../lib/helpers'
+import { formatarMoeda, diasDesde, formatarData, categoriaRelacionamento, LABEL_CATEGORIA } from '../lib/helpers'
 import { exportarParaExcel } from '../lib/excel'
 
 const CORES = ['#B0673A', '#C9A15A', '#5C6E4A', '#8C5A3C', '#3B2417']
 
+const ESTILO_CATEGORIA = {
+  em_dia: { emoji: '🟢', cor: 'text-mata-moss', bg: 'bg-mata-moss/10' },
+  atencao: { emoji: '🟡', cor: 'text-amber-600', bg: 'bg-amber-50' },
+  precisa_contato: { emoji: '🔴', cor: 'text-red-600', bg: 'bg-red-50' },
+}
+
 export default function Dashboard() {
+  const navigate = useNavigate()
+  const { setPageHeader } = useOutletContext()
   const [carregando, setCarregando] = useState(true)
   const [contatos, setContatos] = useState([])
   const [visitas, setVisitas] = useState([])
   const [vendas, setVendas] = useState([])
   const [itensPorVenda, setItensPorVenda] = useState({})
+  const [categoriaPorProduto, setCategoriaPorProduto] = useState({})
+  const [metaMes, setMetaMes] = useState(null)
+  const [categoriaAberta, setCategoriaAberta] = useState(null) // 'em_dia' | 'atencao' | 'precisa_contato' | null
 
   useEffect(() => {
     carregar()
   }, [])
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'Dashboard',
+      subtitle: 'Visão geral do seu negócio',
+      actions: (
+        <button
+          onClick={() => exportarParaExcel({ contatos, visitas, vendas, itensPorVenda })}
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-[#9A5B20] to-[#B8782D] text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-[0_8px_20px_rgba(154,91,32,0.20)] hover:brightness-105 transition"
+        >
+          <span aria-hidden="true">⇩</span>
+          Exportar para Excel
+        </button>
+      ),
+    })
+
+    return () => setPageHeader({ title: '', subtitle: '', actions: null })
+  }, [setPageHeader, contatos, visitas, vendas, itensPorVenda])
 
   async function carregar() {
     setCarregando(true)
@@ -23,6 +53,22 @@ export default function Dashboard() {
     const { data: vData } = await supabase.from('visitas').select('*, contatos(nome)').order('data_visita', { ascending: false })
     const { data: vendaData } = await supabase.from('vendas').select('*, contatos(nome)').order('data_venda', { ascending: false })
     const { data: iData } = await supabase.from('itens_venda').select('*')
+    const { data: prodData } = await supabase.from('produtos').select('id, categoria')
+
+    const catPorProduto = {}
+    ;(prodData || []).forEach((p) => {
+      catPorProduto[p.id] = p.categoria || 'Outros'
+    })
+
+    const primeiroDiaMes = new Date()
+    primeiroDiaMes.setDate(1)
+    const mesISO = primeiroDiaMes.toISOString().slice(0, 10)
+    const { data: metaData } = await supabase
+      .from('metas_mensais')
+      .select('valor_meta')
+      .eq('mes', mesISO)
+      .maybeSingle()
+    setMetaMes(metaData?.valor_meta ?? null)
 
     const agrupado = {}
     ;(iData || []).forEach((i) => {
@@ -34,12 +80,37 @@ export default function Dashboard() {
     setVisitas(vData || [])
     setVendas(vendaData || [])
     setItensPorVenda(agrupado)
+    setCategoriaPorProduto(catPorProduto)
     setCarregando(false)
   }
 
   if (carregando) return <div className="p-8 text-mata-ink/50 text-sm">Carregando…</div>
 
-  // -------- cálculos --------
+  // -------- filtro base: relacionamento considera SÓ contatos ativos hoje --------
+  const contatosAtivos = contatos.filter((c) => c.ativo !== false)
+  const idsAtivos = new Set(contatosAtivos.map((c) => c.id))
+  const visitasAtivas = visitas.filter((v) => !v.contato_id || idsAtivos.has(v.contato_id))
+  const vendasAtivasHoje = vendas.filter((v) => idsAtivos.has(v.contato_id))
+
+  // -------- filtro para indicadores financeiros: conta vendas de contatos
+  // ativos normalmente, e de contatos inativos até a data em que ficaram
+  // inativos (vendas feitas antes da desativação continuam no histórico) --------
+  const contatosPorId = {}
+  contatos.forEach((c) => {
+    contatosPorId[c.id] = c
+  })
+
+  function vendaContaNoHistorico(v) {
+    const c = contatosPorId[v.contato_id]
+    if (!c) return false
+    if (c.ativo !== false) return true
+    if (!c.data_inativacao) return false // inativo sem data registrada: não conta, por segurança
+    return new Date(v.data_venda) <= new Date(c.data_inativacao)
+  }
+
+  const vendasParaIndicadores = vendas.filter(vendaContaNoHistorico)
+
+  // -------- cálculos financeiros (contatos ativos + inativos até a data de inativação) --------
   const hoje = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
 
@@ -49,7 +120,7 @@ export default function Dashboard() {
   const produtoVendas = {}
   const clienteTotais = {}
 
-  vendas.forEach((v) => {
+  vendasParaIndicadores.forEach((v) => {
     const itens = itensPorVenda[v.id] || []
     const totalVenda = itens.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0)
     rendaAcumulada += totalVenda
@@ -80,105 +151,331 @@ export default function Dashboard() {
     .slice(0, 5)
     .map(([nome, total]) => ({ nome, total }))
 
-  // último contato (visita ou venda) por contato_id
+  // -------- vendas por categoria de produto (quantidade de itens) --------
+  const categoriaQtd = {}
+  let totalItensVendidos = 0
+  vendasParaIndicadores.forEach((v) => {
+    const itens = itensPorVenda[v.id] || []
+    itens.forEach((i) => {
+      const cat = (i.produto_id && categoriaPorProduto[i.produto_id]) || 'Outros'
+      categoriaQtd[cat] = (categoriaQtd[cat] || 0) + i.quantidade
+      totalItensVendidos += i.quantidade
+    })
+  })
+  const vendasPorCategoria = Object.entries(categoriaQtd)
+    .sort((a, b) => b[1] - a[1])
+    .map(([categoria, qtd]) => ({
+      categoria,
+      qtd,
+      pct: totalItensVendidos ? Math.round((qtd / totalItensVendidos) * 100) : 0,
+    }))
+
+  // -------- meta x realizado --------
+  const percentualMeta = metaMes ? Math.min(100, Math.round((rendaMes / metaMes) * 100)) : null
+
+  // -------- relacionamento: último contato (visita ou venda) por contato --------
+  // considerando somente visitas/vendas ligadas a contatos ativos
   const ultimoContato = {}
-  ;[...visitas.filter((v) => v.contato_id), ...vendas].forEach((r) => {
+  ;[...visitasAtivas.filter((v) => v.contato_id), ...vendasAtivasHoje].forEach((r) => {
     const data = r.data_visita || r.data_venda
     const id = r.contato_id
     if (!ultimoContato[id] || new Date(data) > new Date(ultimoContato[id])) {
       ultimoContato[id] = data
     }
   })
-  const atrasados = contatos.filter((c) => estaAtrasado(ultimoContato[c.id]))
+
+  // classifica cada contato ativo em em_dia / atencao / precisa_contato
+  const porCategoria = { em_dia: [], atencao: [], precisa_contato: [] }
+  contatosAtivos.forEach((c) => {
+    const cat = categoriaRelacionamento(ultimoContato[c.id])
+    porCategoria[cat].push(c)
+  })
+
+  // lista "precisa de contato" ordenada pelo maior número de dias sem contato primeiro
+  // (nunca contatado conta como o maior atraso possível)
+  function ordenarPorDiasDesc(lista) {
+    return [...lista].sort((a, b) => {
+      const diasA = diasDesde(ultimoContato[a.id])
+      const diasB = diasDesde(ultimoContato[b.id])
+      if (diasA === null && diasB === null) return 0
+      if (diasA === null) return -1
+      if (diasB === null) return 1
+      return diasB - diasA
+    })
+  }
+
+  const listaCategoriaAberta = categoriaAberta
+    ? categoriaAberta === 'precisa_contato'
+      ? ordenarPorDiasDesc(porCategoria[categoriaAberta])
+      : porCategoria[categoriaAberta]
+    : []
+
+  function verCliente(id) {
+    setCategoriaAberta(null)
+    navigate('/cadastro', { state: { editarContatoId: id } })
+  }
+
+  function registrarContato(id) {
+    setCategoriaAberta(null)
+    navigate('/visitas', { state: { novoContatoId: id } })
+  }
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="font-display text-3xl text-mata-ink">Dashboard</h2>
-          <p className="text-mata-ink/50 text-sm mt-1">Visão geral do negócio</p>
-        </div>
-        <button
-          onClick={() => exportarParaExcel({ contatos, visitas, vendas, itensPorVenda })}
-          className="bg-mata-ink text-mata-cream px-4 py-2 rounded-lg text-sm font-medium hover:bg-mata-bark"
-        >
-          Exportar para Excel
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda do mês</p>
-          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaMes)}</p>
-        </div>
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda acumulada</p>
-          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaAcumulada)}</p>
-        </div>
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Contatos atrasados (+30d)</p>
-          <p className="font-display text-2xl text-red-600 mt-1">{atrasados.length}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Vendas por mês</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={graficoMensal}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EDE3D3" />
-              <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => formatarMoeda(v)} />
-              <Bar dataKey="total" fill="#B0673A" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+    <div className="w-full px-4 py-4 lg:px-5 lg:py-5 space-y-4">
+      {/* Indicadores financeiros */}
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="group bg-white/90 border border-[#eadfce] rounded-2xl px-5 py-4 shadow-[0_10px_30px_rgba(77,45,18,0.05)] flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#f5ecdd] text-[#9A5B20] flex items-center justify-center text-3xl shrink-0">▥</div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs uppercase tracking-[0.08em] text-mata-ink/55">Renda do mês</p>
+            <p className="font-display text-3xl lg:text-4xl text-mata-ink leading-tight mt-1">{formatarMoeda(rendaMes)}</p>
+          </div>
+          <span className="text-[#9A5B20] text-3xl opacity-70 group-hover:translate-x-1 transition-transform">›</span>
         </div>
 
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Produtos mais vendidos</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={topProdutos} dataKey="qtd" nameKey="nome" outerRadius={80}>
-                {topProdutos.map((_, i) => (
-                  <Cell key={i} fill={CORES[i % CORES.length]} />
+        <div className="group bg-white/90 border border-[#eadfce] rounded-2xl px-5 py-4 shadow-[0_10px_30px_rgba(77,45,18,0.05)] flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#f5ecdd] text-[#9A5B20] flex items-center justify-center text-3xl shrink-0">◉</div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs uppercase tracking-[0.08em] text-mata-ink/55">Renda acumulada</p>
+            <p className="font-display text-3xl lg:text-4xl text-mata-ink leading-tight mt-1">{formatarMoeda(rendaAcumulada)}</p>
+          </div>
+          <span className="text-[#9A5B20] text-3xl opacity-70 group-hover:translate-x-1 transition-transform">›</span>
+        </div>
+      </section>
+
+      {/* Relacionamento — clicável */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {['em_dia', 'atencao', 'precisa_contato'].map((cat) => {
+          const estilo = ESTILO_CATEGORIA[cat]
+          const icone = cat === 'em_dia' ? '♟' : cat === 'atencao' ? '!' : '☎'
+          const descricao =
+            cat === 'em_dia'
+              ? 'clientes ativos'
+              : cat === 'atencao'
+                ? 'sem compra recente'
+                : 'contatos pendentes'
+
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategoriaAberta(cat)}
+              className="group text-left bg-white/90 border border-[#eadfce] rounded-2xl px-5 py-4 shadow-[0_8px_26px_rgba(77,45,18,0.04)] hover:shadow-[0_12px_30px_rgba(77,45,18,0.09)] transition-all flex items-center gap-4"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-[#f5ecdd] text-[#9A5B20] flex items-center justify-center text-2xl shrink-0">
+                {icone}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs uppercase tracking-[0.06em] text-mata-ink/55 flex items-center gap-2">
+                  <span>{estilo.emoji}</span>
+                  {LABEL_CATEGORIA[cat]}
+                </p>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <p className={`font-display text-3xl leading-none ${estilo.cor}`}>{porCategoria[cat].length}</p>
+                  <span className="text-xs text-mata-ink/55 truncate">{descricao}</span>
+                </div>
+              </div>
+              <span className="text-[#9A5B20] text-3xl opacity-70 group-hover:translate-x-1 transition-transform">›</span>
+            </button>
+          )
+        })}
+      </section>
+
+      {/* Gráficos principais */}
+      <section className="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4">
+        <div className="bg-white/90 border border-[#eadfce] rounded-2xl p-4 lg:p-5 shadow-[0_10px_30px_rgba(77,45,18,0.05)] min-h-[330px] flex flex-col">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <span className="text-[#9A5B20] text-2xl">▥</span>
+              <h3 className="font-display text-2xl text-mata-ink">Vendas por mês</h3>
+            </div>
+            <span className="hidden sm:inline-flex border border-[#eadfce] rounded-xl px-3 py-1.5 text-xs text-mata-ink/65 bg-[#fbf7f0]">Últimos 6 meses</span>
+          </div>
+
+          <div className="flex-1 min-h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={graficoMensal} margin={{ top: 10, right: 8, left: 6, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#EDE3D3" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#59483A' }} axisLine={{ stroke: '#D9C7AE' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#59483A' }} width={55} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v) => formatarMoeda(v)} />
+                <Bar dataKey="total" fill="#A96A26" radius={[6, 6, 0, 0]} maxBarSize={48} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white/90 border border-[#eadfce] rounded-2xl p-4 lg:p-5 shadow-[0_10px_30px_rgba(77,45,18,0.05)] min-h-[330px] flex flex-col">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <span className="text-[#9A5B20] text-2xl">◎</span>
+              <h3 className="font-display text-2xl text-mata-ink">Meta x realizado</h3>
+            </div>
+            <span className="hidden sm:inline-flex border border-[#eadfce] rounded-xl px-3 py-1.5 text-xs text-mata-ink/65 bg-[#fbf7f0]">
+              {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+
+          {metaMes === null ? (
+            <div className="flex-1 flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
+              <div>
+                <p>Meta não definida para este mês.</p>
+                <p className="mt-1">Cadastre em <code className="text-xs bg-mata-sand/50 px-1 rounded">metas_mensais</code> no Supabase.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-6 items-end min-h-[240px]">
+              <div className="grid grid-cols-2 gap-8 h-full items-end px-3">
+                <div className="h-full flex flex-col justify-end items-center gap-2">
+                  <p className="font-display text-lg text-mata-ink">{formatarMoeda(metaMes)}</p>
+                  <div className="w-full max-w-[110px] bg-[#e9ddcb] rounded-t-xl" style={{ height: '65%' }} />
+                  <p className="text-xs text-mata-ink/60">Meta</p>
+                </div>
+                <div className="h-full flex flex-col justify-end items-center gap-2">
+                  <p className="font-display text-lg text-mata-ink">{formatarMoeda(rendaMes)}</p>
+                  <div
+                    className="w-full max-w-[110px] bg-gradient-to-t from-[#8d521e] to-[#b97a2e] rounded-t-xl"
+                    style={{ height: `${Math.max(8, Math.min(65, (rendaMes / metaMes) * 65))}%` }}
+                  />
+                  <p className="text-xs text-mata-ink/60">Realizado</p>
+                </div>
+              </div>
+
+              <div className="border-l border-[#eadfce] pl-5 pb-6 text-center sm:text-left">
+                <p className="font-display text-5xl text-[#9A5B20] leading-none">{percentualMeta}%</p>
+                <p className="text-sm text-mata-ink/60 mt-2">da meta alcançada</p>
+                <div className="h-3 bg-[#eee4d5] rounded-full mt-5 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-[#8d521e] to-[#c18a3d] rounded-full" style={{ width: `${percentualMeta}%` }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Produtos + categorias */}
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-white/90 border border-[#eadfce] rounded-2xl p-4 lg:p-5 shadow-[0_10px_30px_rgba(77,45,18,0.05)] min-h-[260px]">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-[#9A5B20] text-2xl">◇</span>
+              <h3 className="font-display text-2xl text-mata-ink">Produtos mais vendidos</h3>
+            </div>
+            <span className="hidden sm:inline-flex border border-[#eadfce] rounded-xl px-3 py-1.5 text-xs text-mata-ink/65 bg-[#fbf7f0]">Todos os períodos</span>
+          </div>
+
+          {topProdutos.length === 0 ? (
+            <div className="min-h-[170px] flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
+              Ainda não há vendas de produtos.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {topProdutos.map((produto, i) => (
+                <div key={produto.nome} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-3 py-2 rounded-xl odd:bg-[#f8f1e7]">
+                  <span className="w-7 h-7 rounded-full bg-[#a96a26] text-white flex items-center justify-center text-xs font-medium">{i + 1}</span>
+                  <span className="text-sm text-mata-ink truncate">{produto.nome}</span>
+                  <span className="text-sm font-semibold text-mata-ink">{produto.qtd}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white/90 border border-[#eadfce] rounded-2xl p-4 lg:p-5 shadow-[0_10px_30px_rgba(77,45,18,0.05)] min-h-[260px]">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <span className="text-[#9A5B20] text-2xl">◔</span>
+              <h3 className="font-display text-2xl text-mata-ink">Vendas por categoria</h3>
+            </div>
+            <span className="hidden sm:inline-flex border border-[#eadfce] rounded-xl px-3 py-1.5 text-xs text-mata-ink/65 bg-[#fbf7f0]">Todos os períodos</span>
+          </div>
+
+          {vendasPorCategoria.length === 0 ? (
+            <div className="min-h-[170px] flex items-center justify-center text-sm text-mata-ink/40">Sem vendas de produtos ainda.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-[190px_1fr] items-center gap-5 min-h-[190px]">
+              <div className="relative h-[180px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={vendasPorCategoria} dataKey="qtd" nameKey="categoria" innerRadius="58%" outerRadius="90%" paddingAngle={1}>
+                      {vendasPorCategoria.map((_, i) => (
+                        <Cell key={i} fill={CORES[i % CORES.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <p className="font-display text-3xl text-mata-ink leading-none">{totalItensVendidos}</p>
+                  <p className="text-[11px] text-mata-ink/50 mt-1">itens</p>
+                </div>
+              </div>
+
+              <ul className="space-y-2 text-sm">
+                {vendasPorCategoria.map((c, i) => (
+                  <li key={c.categoria} className="flex items-center justify-between gap-4">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CORES[i % CORES.length] }} />
+                      <span className="truncate">{c.categoria}</span>
+                    </span>
+                    <span className="font-medium text-mata-ink/70">{c.pct}%</span>
+                  </li>
                 ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+              </ul>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Clientes que mais compram</p>
-          <ul className="space-y-2">
-            {topClientes.map((c) => (
-              <li key={c.nome} className="flex justify-between text-sm">
-                <span>{c.nome}</span>
-                <span className="text-mata-copper font-medium">{formatarMoeda(c.total)}</span>
-              </li>
-            ))}
-            {topClientes.length === 0 && <p className="text-sm text-mata-ink/40">Sem vendas ainda.</p>}
-          </ul>
-        </div>
+      {/* Modal com a lista detalhada da categoria clicada */}
+      {categoriaAberta && (
+        <div className="fixed inset-0 bg-[#1d120b]/45 backdrop-blur-[2px] flex items-center justify-center p-4 sm:p-6 z-50">
+          <div className="bg-[#fffdfa] border border-[#eadfce] rounded-2xl p-5 sm:p-6 w-full max-w-2xl max-h-[82vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="font-display text-2xl text-mata-ink">
+                {ESTILO_CATEGORIA[categoriaAberta].emoji} {LABEL_CATEGORIA[categoriaAberta]}{' '}
+                <span className="text-mata-ink/40 text-sm font-sans">({listaCategoriaAberta.length})</span>
+              </h3>
+              <button onClick={() => setCategoriaAberta(null)} className="text-mata-ink/45 hover:text-mata-ink text-sm">Fechar ✕</button>
+            </div>
 
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Precisam de contato (+30 dias)</p>
-          <ul className="space-y-2">
-            {atrasados.slice(0, 8).map((c) => (
-              <li key={c.id} className="flex justify-between text-sm">
-                <span>{c.nome} <span className="text-xs text-mata-ink/40">({c.tipo === 'comprador' ? 'compradora' : 'revendedora'})</span></span>
-                <span className="text-red-600 text-xs">
-                  {ultimoContato[c.id] ? `${diasDesde(ultimoContato[c.id])}d — ${formatarData(ultimoContato[c.id])}` : 'nunca contatada'}
-                </span>
-              </li>
-            ))}
-            {atrasados.length === 0 && <p className="text-sm text-mata-ink/40">Tudo em dia 🌿</p>}
-          </ul>
+            {listaCategoriaAberta.length === 0 ? (
+              <p className="text-sm text-mata-ink/40">Nenhum contato ativo nessa categoria.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[620px]">
+                  <thead className="text-mata-ink/50 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left py-2">Nome</th>
+                      <th className="text-left py-2">Tipo</th>
+                      <th className="text-left py-2">Último contato</th>
+                      <th className="text-left py-2">Dias</th>
+                      <th className="text-right py-2">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listaCategoriaAberta.map((c) => {
+                      const ultima = ultimoContato[c.id]
+                      const dias = diasDesde(ultima)
+                      return (
+                        <tr key={c.id} className="border-t border-mata-sand/70">
+                          <td className="py-2.5 font-medium">{c.nome}</td>
+                          <td className="py-2.5 text-mata-ink/60">{c.tipo === 'comprador' ? 'Compradora' : 'Revendedora'}</td>
+                          <td className="py-2.5 text-mata-ink/60">{ultima ? formatarData(ultima) : '—'}</td>
+                          <td className="py-2.5 text-mata-ink/60">{dias === null ? 'Nunca contatado' : `${dias}d`}</td>
+                          <td className="py-2.5 text-right space-x-3">
+                            <button onClick={() => verCliente(c.id)} className="text-mata-copper hover:underline">👁 Ver cliente</button>
+                            <button onClick={() => registrarContato(c.id)} className="text-mata-copper hover:underline">📝 Registrar contato</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
