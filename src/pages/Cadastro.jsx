@@ -3,15 +3,32 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { diasDesde, estaAtrasado, formatarData } from '../lib/helpers'
 
-const vazio = { nome: '', tipo: 'comprador', telefone: '', email: '', cidade: '', observacoes: '', ativo: true, data_inativacao: null }
+const vazio = {
+  nome: '',
+  tipo: 'comprador',
+  telefone: '',
+  email: '',
+  cidade: '',
+  estado: '',
+  bairro: '',
+  endereco: '',
+  cep: '',
+  cnpj: '',
+  instagram: '',
+  observacoes: '',
+  ativo: true,
+  data_inativacao: null,
+}
 
 export default function Cadastro() {
   const location = useLocation()
   const navigate = useNavigate()
   const [contatos, setContatos] = useState([])
   const [ultimoContato, setUltimoContato] = useState({}) // { contato_id: dataISO }
+  const [visitasMes, setVisitasMes] = useState(0)
   const [aba, setAba] = useState('comprador')
   const [mostrarInativos, setMostrarInativos] = useState(false)
+  const [busca, setBusca] = useState('')
   const [carregando, setCarregando] = useState(true)
   const [form, setForm] = useState(vazio)
   const [editandoId, setEditandoId] = useState(null)
@@ -48,6 +65,15 @@ export default function Cadastro() {
       .from('vendas')
       .select('contato_id, data_venda')
       .order('data_venda', { ascending: false })
+
+    const inicioMes = new Date()
+    inicioMes.setDate(1)
+    inicioMes.setHours(0, 0, 0, 0)
+    const { data: visitasMesData } = await supabase
+      .from('visitas')
+      .select('id')
+      .gte('data_visita', inicioMes.toISOString())
+    setVisitasMes(visitasMesData?.length || 0)
 
     const ultimos = {}
     ;[...(vData || []), ...(vendaData || [])].forEach((r) => {
@@ -103,9 +129,22 @@ export default function Cadastro() {
     carregar()
   }
 
-  const listaFiltrada = contatos.filter(
-    (c) => c.tipo === aba && (mostrarInativos ? true : c.ativo !== false)
-  )
+  const contatosAtivos = contatos.filter((c) => c.ativo !== false)
+  const compradorasAtivas = contatosAtivos.filter((c) => c.tipo === 'comprador').length
+  const revendedorasAtivas = contatosAtivos.filter((c) => c.tipo === 'revendedor').length
+  const retornosPendentes = contatosAtivos.filter((c) => estaAtrasado(ultimoContato[c.id])).length
+
+  const buscaNormalizada = busca.trim().toLowerCase()
+  const listaFiltrada = contatos.filter((c) => {
+    if (c.tipo !== aba) return false
+    if (!mostrarInativos && c.ativo === false) return false
+    if (!buscaNormalizada) return true
+    return (
+      c.nome?.toLowerCase().includes(buscaNormalizada) ||
+      c.telefone?.toLowerCase().includes(buscaNormalizada) ||
+      c.cidade?.toLowerCase().includes(buscaNormalizada)
+    )
+  })
 
   return (
     <div className="p-8 max-w-5xl">
@@ -120,6 +159,25 @@ export default function Cadastro() {
         >
           + Novo cadastro
         </button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Compradoras ativas</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{compradorasAtivas}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Revendedoras ativas</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{revendedorasAtivas}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Visitas do mês</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{visitasMes}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Retornos pendentes</p>
+          <p className="font-display text-2xl text-red-600 mt-1">{retornosPendentes}</p>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-5 border-b border-mata-sand">
@@ -146,10 +204,22 @@ export default function Cadastro() {
         </label>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Localizar por nome, telefone ou cidade..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="w-full sm:w-80 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+
       {carregando ? (
         <p className="text-mata-ink/50 text-sm">Carregando…</p>
       ) : listaFiltrada.length === 0 ? (
-        <p className="text-mata-ink/50 text-sm">Nenhum cadastro ainda nesta categoria.</p>
+        <p className="text-mata-ink/50 text-sm">
+          {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum cadastro ainda nesta categoria.'}
+        </p>
       ) : (
         <div className="bg-white rounded-xl overflow-hidden border border-mata-sand">
           <table className="w-full text-sm">
@@ -249,12 +319,60 @@ export default function Cadastro() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full border border-mata-sand rounded-lg px-3 py-2 text-sm"
             />
+            <div className="flex gap-2">
+              <input
+                placeholder="Cidade"
+                value={form.cidade}
+                onChange={(e) => setForm({ ...form, cidade: e.target.value })}
+                className="flex-1 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="Estado"
+                value={form.estado}
+                onChange={(e) => setForm({ ...form, estado: e.target.value })}
+                className="w-24 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                placeholder="Bairro"
+                value={form.bairro}
+                onChange={(e) => setForm({ ...form, bairro: e.target.value })}
+                className="flex-1 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="CEP"
+                value={form.cep}
+                onChange={(e) => setForm({ ...form, cep: e.target.value })}
+                className="w-32 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
             <input
-              placeholder="Cidade"
-              value={form.cidade}
-              onChange={(e) => setForm({ ...form, cidade: e.target.value })}
+              placeholder="Endereço"
+              value={form.endereco}
+              onChange={(e) => setForm({ ...form, endereco: e.target.value })}
               className="w-full border border-mata-sand rounded-lg px-3 py-2 text-sm"
             />
+
+            {form.tipo === 'revendedor' && (
+              <div className="flex gap-2">
+                <input
+                  placeholder="CNPJ"
+                  value={form.cnpj}
+                  onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                  className="flex-1 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  placeholder="Instagram"
+                  value={form.instagram}
+                  onChange={(e) => setForm({ ...form, instagram: e.target.value })}
+                  className="flex-1 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+
             <textarea
               placeholder="Observações"
               value={form.observacoes}

@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [visitas, setVisitas] = useState([])
   const [vendas, setVendas] = useState([])
   const [itensPorVenda, setItensPorVenda] = useState({})
+  const [categoriaPorProduto, setCategoriaPorProduto] = useState({})
+  const [metaMes, setMetaMes] = useState(null)
   const [categoriaAberta, setCategoriaAberta] = useState(null) // 'em_dia' | 'atencao' | 'precisa_contato' | null
 
   useEffect(() => {
@@ -32,6 +34,22 @@ export default function Dashboard() {
     const { data: vData } = await supabase.from('visitas').select('*, contatos(nome)').order('data_visita', { ascending: false })
     const { data: vendaData } = await supabase.from('vendas').select('*, contatos(nome)').order('data_venda', { ascending: false })
     const { data: iData } = await supabase.from('itens_venda').select('*')
+    const { data: prodData } = await supabase.from('produtos').select('id, categoria')
+
+    const catPorProduto = {}
+    ;(prodData || []).forEach((p) => {
+      catPorProduto[p.id] = p.categoria || 'Outros'
+    })
+
+    const primeiroDiaMes = new Date()
+    primeiroDiaMes.setDate(1)
+    const mesISO = primeiroDiaMes.toISOString().slice(0, 10)
+    const { data: metaData } = await supabase
+      .from('metas_mensais')
+      .select('valor_meta')
+      .eq('mes', mesISO)
+      .maybeSingle()
+    setMetaMes(metaData?.valor_meta ?? null)
 
     const agrupado = {}
     ;(iData || []).forEach((i) => {
@@ -43,6 +61,7 @@ export default function Dashboard() {
     setVisitas(vData || [])
     setVendas(vendaData || [])
     setItensPorVenda(agrupado)
+    setCategoriaPorProduto(catPorProduto)
     setCarregando(false)
   }
 
@@ -112,6 +131,28 @@ export default function Dashboard() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([nome, total]) => ({ nome, total }))
+
+  // -------- vendas por categoria de produto (quantidade de itens) --------
+  const categoriaQtd = {}
+  let totalItensVendidos = 0
+  vendasParaIndicadores.forEach((v) => {
+    const itens = itensPorVenda[v.id] || []
+    itens.forEach((i) => {
+      const cat = (i.produto_id && categoriaPorProduto[i.produto_id]) || 'Outros'
+      categoriaQtd[cat] = (categoriaQtd[cat] || 0) + i.quantidade
+      totalItensVendidos += i.quantidade
+    })
+  })
+  const vendasPorCategoria = Object.entries(categoriaQtd)
+    .sort((a, b) => b[1] - a[1])
+    .map(([categoria, qtd]) => ({
+      categoria,
+      qtd,
+      pct: totalItensVendidos ? Math.round((qtd / totalItensVendidos) * 100) : 0,
+    }))
+
+  // -------- meta x realizado --------
+  const percentualMeta = metaMes ? Math.min(100, Math.round((rendaMes / metaMes) * 100)) : null
 
   // -------- relacionamento: último contato (visita ou venda) por contato --------
   // considerando somente visitas/vendas ligadas a contatos ativos
@@ -220,6 +261,41 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-sm font-medium mb-3">Meta x realizado</p>
+          {metaMes === null ? (
+            <div className="h-[220px] flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
+              Meta não definida para este mês.
+              <br />
+              Cadastre em <code className="text-xs bg-mata-sand/50 px-1 rounded">metas_mensais</code> no Supabase.
+            </div>
+          ) : (
+            <div className="h-[220px] flex items-center gap-6 px-2">
+              <div className="flex-1 flex items-end gap-4 h-[180px]">
+                <div className="flex-1 flex flex-col items-center gap-2">
+                  <div className="w-full bg-mata-sand rounded-t-lg" style={{ height: '100%' }} />
+                  <p className="text-xs text-mata-ink/50">Meta</p>
+                  <p className="text-sm font-medium">{formatarMoeda(metaMes)}</p>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                  <div
+                    className="w-full bg-mata-copper rounded-t-lg"
+                    style={{ height: `${Math.min(100, (rendaMes / metaMes) * 100)}%` }}
+                  />
+                  <p className="text-xs text-mata-ink/50">Realizado</p>
+                  <p className="text-sm font-medium">{formatarMoeda(rendaMes)}</p>
+                </div>
+              </div>
+              <div className="text-center shrink-0">
+                <p className="font-display text-3xl text-mata-copper">{percentualMeta}%</p>
+                <p className="text-xs text-mata-ink/50 mt-1">da meta<br />alcançada</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
           <p className="text-sm font-medium mb-3">Produtos mais vendidos</p>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
@@ -231,6 +307,53 @@ export default function Dashboard() {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-sm font-medium mb-3">Vendas por categoria</p>
+          {vendasPorCategoria.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center text-sm text-mata-ink/40">
+              Sem vendas de produtos ainda.
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <ResponsiveContainer width={160} height={160}>
+                  <PieChart>
+                    <Pie
+                      data={vendasPorCategoria}
+                      dataKey="qtd"
+                      nameKey="categoria"
+                      innerRadius={45}
+                      outerRadius={75}
+                    >
+                      {vendasPorCategoria.map((_, i) => (
+                        <Cell key={i} fill={CORES[i % CORES.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <p className="font-display text-xl text-mata-ink">{totalItensVendidos}</p>
+                  <p className="text-[10px] text-mata-ink/50">itens</p>
+                </div>
+              </div>
+              <ul className="flex-1 space-y-1.5 text-sm">
+                {vendasPorCategoria.map((c, i) => (
+                  <li key={c.categoria} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block"
+                        style={{ backgroundColor: CORES[i % CORES.length] }}
+                      />
+                      {c.categoria}
+                    </span>
+                    <span className="text-mata-ink/60">{c.pct}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 

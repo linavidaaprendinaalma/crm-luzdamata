@@ -20,6 +20,7 @@ export default function Visitas() {
   const [form, setForm] = useState(vazio)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [convertendo, setConvertendo] = useState(null) // visita sendo convertida
+  const [busca, setBusca] = useState('')
 
   useEffect(() => {
     carregar()
@@ -85,6 +86,18 @@ export default function Visitas() {
     carregar()
   }
 
+  const totalVisitas = visitas.length
+  const videoconferencias = visitas.filter((v) => v.tipo_contato === 'videoconferencia').length
+  const presenciais = visitas.filter((v) => v.tipo_contato === 'presencial').length
+  const convertidas = visitas.filter((v) => v.convertido).length
+
+  const buscaNormalizada = busca.trim().toLowerCase()
+  const visitasFiltradas = visitas.filter((v) => {
+    if (!buscaNormalizada) return true
+    const nome = v.nome_lead || v.contatos?.nome || ''
+    return nome.toLowerCase().includes(buscaNormalizada)
+  })
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -100,13 +113,44 @@ export default function Visitas() {
         </button>
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Agendadas</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{totalVisitas}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Videoconferência</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{videoconferencias}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Presenciais</p>
+          <p className="font-display text-2xl text-mata-ink mt-1">{presenciais}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Convertidas em negócio</p>
+          <p className="font-display text-2xl text-mata-moss mt-1">{convertidas}</p>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Localizar por nome..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="w-full sm:w-80 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+
       {carregando ? (
         <p className="text-mata-ink/50 text-sm">Carregando…</p>
-      ) : visitas.length === 0 ? (
-        <p className="text-mata-ink/50 text-sm">Nenhuma visita agendada ainda.</p>
+      ) : visitasFiltradas.length === 0 ? (
+        <p className="text-mata-ink/50 text-sm">
+          {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma visita agendada ainda.'}
+        </p>
       ) : (
         <div className="space-y-3">
-          {visitas.map((v) => (
+          {visitasFiltradas.map((v) => (
             <div key={v.id} className="bg-white border border-mata-sand rounded-xl p-4 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">

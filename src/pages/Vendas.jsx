@@ -11,6 +11,7 @@ export default function Vendas() {
   const [itensPorVenda, setItensPorVenda] = useState({})
   const [carregando, setCarregando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [busca, setBusca] = useState('')
   const [form, setForm] = useState(vendaVazia)
   const [itensForm, setItensForm] = useState([{ produto_id: '', produto_nome: '', quantidade: 1, valor_unitario: 0 }])
 
@@ -77,6 +78,23 @@ export default function Vendas() {
 
   const totalForm = itensForm.reduce((s, i) => s + (i.quantidade || 0) * (i.valor_unitario || 0), 0)
 
+  const totalVenda = (v) => (itensPorVenda[v.id] || []).reduce((s, i) => s + i.quantidade * i.valor_unitario, 0)
+  const totalGeral = vendas.reduce((s, v) => s + totalVenda(v), 0)
+  const ticketMedio = vendas.length ? totalGeral / vendas.length : 0
+
+  const inicioMes = new Date()
+  inicioMes.setDate(1)
+  inicioMes.setHours(0, 0, 0, 0)
+  const totalMes = vendas
+    .filter((v) => new Date(v.data_venda) >= inicioMes)
+    .reduce((s, v) => s + totalVenda(v), 0)
+
+  const buscaNormalizada = busca.trim().toLowerCase()
+  const vendasFiltradas = vendas.filter((v) => {
+    if (!buscaNormalizada) return true
+    return v.contatos?.nome?.toLowerCase().includes(buscaNormalizada)
+  })
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -92,13 +110,36 @@ export default function Vendas() {
         </button>
       </div>
 
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Ticket médio</p>
+          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(ticketMedio)}</p>
+        </div>
+        <div className="bg-white border border-mata-sand rounded-xl p-5">
+          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Total vendido no mês</p>
+          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(totalMes)}</p>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Localizar por cliente ou revendedora..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="w-full sm:w-80 border border-mata-sand rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+
       {carregando ? (
         <p className="text-mata-ink/50 text-sm">Carregando…</p>
-      ) : vendas.length === 0 ? (
-        <p className="text-mata-ink/50 text-sm">Nenhuma venda registrada ainda.</p>
+      ) : vendasFiltradas.length === 0 ? (
+        <p className="text-mata-ink/50 text-sm">
+          {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma venda registrada ainda.'}
+        </p>
       ) : (
         <div className="space-y-3">
-          {vendas.map((v) => {
+          {vendasFiltradas.map((v) => {
             const itens = itensPorVenda[v.id] || []
             const total = itens.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0)
             return (
