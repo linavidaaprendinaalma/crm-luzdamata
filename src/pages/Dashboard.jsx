@@ -202,91 +202,93 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 max-w-6xl mx-auto h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="font-display text-3xl text-mata-ink">Dashboard</h2>
-          <p className="text-mata-ink/50 text-sm mt-1">Visão geral do negócio</p>
+          <h2 className="font-display text-xl text-mata-ink">Dashboard</h2>
+          <p className="text-mata-ink/50 text-xs mt-0.5">Visão geral do negócio</p>
         </div>
         <button
           onClick={() => exportarParaExcel({ contatos, visitas, vendas, itensPorVenda })}
-          className="bg-mata-ink text-mata-cream px-4 py-2 rounded-lg text-sm font-medium hover:bg-mata-bark"
+          className="bg-mata-ink text-mata-cream px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-mata-bark"
         >
           Exportar para Excel
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda do mês</p>
-          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaMes)}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div className="bg-white border border-mata-sand rounded-xl px-4 py-2.5">
+          <p className="text-[11px] text-mata-ink/50 uppercase tracking-wide">Renda do mês</p>
+          <p className="font-display text-lg text-mata-copper leading-tight">{formatarMoeda(rendaMes)}</p>
         </div>
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-xs text-mata-ink/50 uppercase tracking-wide">Renda acumulada</p>
-          <p className="font-display text-2xl text-mata-copper mt-1">{formatarMoeda(rendaAcumulada)}</p>
+        <div className="bg-white border border-mata-sand rounded-xl px-4 py-2.5">
+          <p className="text-[11px] text-mata-ink/50 uppercase tracking-wide">Renda acumulada</p>
+          <p className="font-display text-lg text-mata-copper leading-tight">{formatarMoeda(rendaAcumulada)}</p>
         </div>
       </div>
 
       {/* Indicador de relacionamento — só contatos ativos, clicável */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
         {['em_dia', 'atencao', 'precisa_contato'].map((cat) => {
           const estilo = ESTILO_CATEGORIA[cat]
           return (
             <button
               key={cat}
               onClick={() => setCategoriaAberta(cat)}
-              className={`text-left bg-white border border-mata-sand rounded-xl p-5 hover:shadow-md transition-shadow ${estilo.bg}`}
+              className={`text-left bg-white border border-mata-sand rounded-xl px-4 py-2.5 hover:shadow-md transition-shadow ${estilo.bg}`}
             >
-              <p className="text-xs text-mata-ink/50 uppercase tracking-wide">
+              <p className="text-[11px] text-mata-ink/50 uppercase tracking-wide">
                 {estilo.emoji} {LABEL_CATEGORIA[cat]}
               </p>
-              <p className={`font-display text-2xl mt-1 ${estilo.cor}`}>{porCategoria[cat].length}</p>
+              <p className={`font-display text-lg leading-tight mt-0.5 ${estilo.cor}`}>{porCategoria[cat].length}</p>
             </button>
           )
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Vendas por mês</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={graficoMensal}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EDE3D3" />
-              <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => formatarMoeda(v)} />
-              <Bar dataKey="total" fill="#B0673A" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 flex-1 min-h-0">
+        <div className="bg-white border border-mata-sand rounded-xl p-3 flex flex-col">
+          <p className="text-sm font-medium mb-1 shrink-0">Vendas por mês</p>
+          <div className="flex-1 min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={graficoMensal}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#EDE3D3" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={36} />
+                <Tooltip formatter={(v) => formatarMoeda(v)} />
+                <Bar dataKey="total" fill="#B0673A" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Meta x realizado</p>
+        <div className="bg-white border border-mata-sand rounded-xl p-3 flex flex-col">
+          <p className="text-sm font-medium mb-1">Meta x realizado</p>
           {metaMes === null ? (
-            <div className="h-[220px] flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
+            <div className="flex-1 flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
               Meta não definida para este mês.
               <br />
               Cadastre em <code className="text-xs bg-mata-sand/50 px-1 rounded">metas_mensais</code> no Supabase.
             </div>
           ) : (
-            <div className="h-[220px] flex items-center gap-6 px-2">
-              <div className="flex-1 flex items-end gap-4 h-[180px]">
-                <div className="flex-1 flex flex-col items-center gap-2">
-                  <div className="w-full bg-mata-sand rounded-t-lg" style={{ height: '100%' }} />
+            <div className="flex-1 flex items-center gap-5 px-2 min-h-0">
+              <div className="flex-1 flex items-end gap-4 h-full">
+                <div className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                  <div className="w-full bg-mata-sand rounded-t-lg" style={{ height: '85%' }} />
                   <p className="text-xs text-mata-ink/50">Meta</p>
                   <p className="text-sm font-medium">{formatarMoeda(metaMes)}</p>
                 </div>
-                <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                <div className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
                   <div
                     className="w-full bg-mata-copper rounded-t-lg"
-                    style={{ height: `${Math.min(100, (rendaMes / metaMes) * 100)}%` }}
+                    style={{ height: `${Math.min(85, (rendaMes / metaMes) * 85)}%` }}
                   />
                   <p className="text-xs text-mata-ink/50">Realizado</p>
                   <p className="text-sm font-medium">{formatarMoeda(rendaMes)}</p>
                 </div>
               </div>
               <div className="text-center shrink-0">
-                <p className="font-display text-3xl text-mata-copper">{percentualMeta}%</p>
+                <p className="font-display text-2xl text-mata-copper">{percentualMeta}%</p>
                 <p className="text-xs text-mata-ink/50 mt-1">da meta<br />alcançada</p>
               </div>
             </div>
@@ -294,38 +296,46 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Produtos mais vendidos</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={topProdutos} dataKey="qtd" nameKey="nome" outerRadius={80}>
-                {topProdutos.map((_, i) => (
-                  <Cell key={i} fill={CORES[i % CORES.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 shrink-0" style={{ height: '150px' }}>
+        <div className="bg-white border border-mata-sand rounded-xl p-3 flex flex-col">
+          <p className="text-sm font-medium mb-1 shrink-0">Produtos mais vendidos</p>
+          {topProdutos.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-sm text-mata-ink/40 text-center px-4">
+              Ainda não há vendas de produtos.
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={topProdutos} dataKey="qtd" nameKey="nome" outerRadius={45}>
+                    {topProdutos.map((_, i) => (
+                      <Cell key={i} fill={CORES[i % CORES.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
-        <div className="bg-white border border-mata-sand rounded-xl p-5">
-          <p className="text-sm font-medium mb-3">Vendas por categoria</p>
+        <div className="bg-white border border-mata-sand rounded-xl p-3 flex flex-col">
+          <p className="text-sm font-medium mb-1">Vendas por categoria</p>
           {vendasPorCategoria.length === 0 ? (
-            <div className="h-[220px] flex items-center justify-center text-sm text-mata-ink/40">
+            <div className="flex-1 flex items-center justify-center text-sm text-mata-ink/40">
               Sem vendas de produtos ainda.
             </div>
           ) : (
-            <div className="flex items-center gap-4">
-              <div className="relative shrink-0">
-                <ResponsiveContainer width={160} height={160}>
+            <div className="flex-1 flex items-center gap-4 min-h-0">
+              <div className="relative shrink-0 h-full aspect-square">
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={vendasPorCategoria}
                       dataKey="qtd"
                       nameKey="categoria"
-                      innerRadius={45}
-                      outerRadius={75}
+                      innerRadius="55%"
+                      outerRadius="90%"
                     >
                       {vendasPorCategoria.map((_, i) => (
                         <Cell key={i} fill={CORES[i % CORES.length]} />
@@ -334,16 +344,16 @@ export default function Dashboard() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="font-display text-xl text-mata-ink">{totalItensVendidos}</p>
-                  <p className="text-[10px] text-mata-ink/50">itens</p>
+                  <p className="font-display text-base text-mata-ink leading-none">{totalItensVendidos}</p>
+                  <p className="text-[9px] text-mata-ink/50">itens</p>
                 </div>
               </div>
-              <ul className="flex-1 space-y-1.5 text-sm">
+              <ul className="flex-1 space-y-1 text-xs">
                 {vendasPorCategoria.map((c, i) => (
                   <li key={c.categoria} className="flex items-center justify-between">
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-1.5">
                       <span
-                        className="w-2.5 h-2.5 rounded-full inline-block"
+                        className="w-2 h-2 rounded-full inline-block"
                         style={{ backgroundColor: CORES[i % CORES.length] }}
                       />
                       {c.categoria}
