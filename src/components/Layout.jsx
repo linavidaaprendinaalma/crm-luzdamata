@@ -2,12 +2,17 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import sidebarLeaves from '../assets/sidebar-leaves.png'
+import bannerCabecalho from '../assets/banner_cabecalho.png'
+import bannerRodape from '../assets/banner_rodape.png'
 
 const links = [
   { to: '/', label: 'Dashboard', end: true },
-  { to: '/visitas', label: 'Visitas' },
-  { to: '/cadastro', label: 'Cadastro' },
+  { to: '/visitas', label: 'Agenda' },
+  { to: '/cadastro', label: 'Clientes' },
   { to: '/vendas', label: 'Vendas' },
+  { to: '/produtos', label: 'Produtos' },
+  { to: '/relatorios', label: 'Relatórios' },
+  { to: '/configuracoes', label: 'Configurações' },
 ]
 
 function IconeMarca() {
@@ -37,6 +42,7 @@ function iniciais(nome) {
 export default function Layout() {
   const { session, sair } = useAuth()
   const [menuAberto, setMenuAberto] = useState(false)
+  const [pageHeader, setPageHeader] = useState({ title: '', subtitle: '', actions: null })
   const nome = nomeExibicao(session)
 
   return (
@@ -85,29 +91,50 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <header className="h-16 shrink-0 border-b border-mata-sand bg-mata-cream flex items-center justify-end px-6 gap-4 relative">
-          <button
-            type="button"
-            className="text-mata-ink/50 hover:text-mata-ink"
-            title="Notificações"
-          >
-            🔔
-          </button>
+        <header
+          className="h-16 shrink-0 border-b border-mata-sand bg-mata-cream flex items-center justify-between px-6 gap-4 relative overflow-hidden"
+          style={{
+            backgroundImage: `linear-gradient(90deg, rgba(250,246,238,1) 40%, rgba(250,246,238,0.4)), url(${bannerCabecalho})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'right center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div className="min-w-0">
+            {pageHeader.title && (
+              <h2 className="font-display text-lg text-mata-ink leading-tight truncate">{pageHeader.title}</h2>
+            )}
+            {pageHeader.subtitle && (
+              <p className="text-mata-ink/50 text-xs truncate">{pageHeader.subtitle}</p>
+            )}
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setMenuAberto((v) => !v)}
-            className="flex items-center gap-2"
-          >
-            <span className="w-8 h-8 rounded-full bg-mata-copper text-white text-xs font-medium flex items-center justify-center">
-              {iniciais(nome)}
-            </span>
-            <span className="text-left leading-tight hidden sm:block">
-              <span className="block text-sm font-medium text-mata-ink truncate max-w-[160px]">{nome}</span>
-              <span className="block text-[11px] text-mata-ink/50">Equipe LuzDaMata</span>
-            </span>
-            <span className="text-mata-ink/40 text-xs">▾</span>
-          </button>
+          <div className="flex items-center gap-4 shrink-0">
+            {pageHeader.actions}
+
+            <button
+              type="button"
+              className="text-mata-ink/50 hover:text-mata-ink"
+              title="Notificações"
+            >
+              🔔
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMenuAberto((v) => !v)}
+              className="flex items-center gap-2"
+            >
+              <span className="w-8 h-8 rounded-full bg-mata-copper text-white text-xs font-medium flex items-center justify-center">
+                {iniciais(nome)}
+              </span>
+              <span className="text-left leading-tight hidden sm:block">
+                <span className="block text-sm font-medium text-mata-ink truncate max-w-[160px]">{nome}</span>
+                <span className="block text-[11px] text-mata-ink/50">Equipe LuzDaMata</span>
+              </span>
+              <span className="text-mata-ink/40 text-xs">▾</span>
+            </button>
+          </div>
 
           {menuAberto && (
             <div className="absolute top-14 right-6 bg-white border border-mata-sand rounded-lg shadow-lg py-1 w-40 z-30">
@@ -122,8 +149,36 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto">
-          <Outlet />
+          <Outlet context={{ setPageHeader }} />
         </main>
+
+        <footer
+          className="h-11 shrink-0 border-t border-mata-sand bg-mata-cream flex items-center justify-between px-6 text-xs text-mata-ink/50 relative overflow-hidden"
+          style={{
+            backgroundImage: `linear-gradient(90deg, rgba(250,246,238,1) 55%, rgba(250,246,238,0.5)), url(${bannerRodape})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'right center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-mata-gold shrink-0">
+              <IconeMarca />
+            </span>
+            <span className="font-display text-sm text-mata-ink shrink-0">LuzDaMata</span>
+            <span className="text-mata-sand shrink-0">|</span>
+            <span className="truncate">Conexões que transformam resultados.</span>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span>v1.0.0</span>
+            <span className="text-mata-sand">|</span>
+            <button type="button" className="hover:text-mata-ink">Ajuda</button>
+            <span className="text-mata-sand">|</span>
+            <button type="button" className="hover:text-mata-ink">Termos de Uso</button>
+            <span className="text-mata-sand">|</span>
+            <button type="button" className="hover:text-mata-ink">Privacidade</button>
+          </div>
+        </footer>
       </div>
     </div>
   )
